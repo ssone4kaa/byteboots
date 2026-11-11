@@ -1,0 +1,60 @@
+name: Build macOS
+
+on:
+  workflow_dispatch: # Позволяет запускать сборку вручную из интерфейса GitHub
+
+jobs:
+  build-macos:
+    runs-on: macos-latest # Используем последний macOS (сейчас это ARM/M1, но работает и на Intel через Rosetta)
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build with PyInstaller
+        run: |
+          # ВАЖНО: на macOS разделитель в --add-data это двоеточие (:), а не точка с запятой (;)
+          pyinstaller --onefile --windowed --name="ByteBoots" \
+            --add-data "generated:generated" \
+            --add-data "ui:ui" \
+            --add-data "images:images" \
+            --add-data "templates:templates" \
+            --add-data "app:app" \
+            main.py
+
+      - name: Package for distribution
+        run: |
+          # Создаем папку для финальной сборки
+          mkdir -p release/ByteBoots-macOS
+          
+          # Копируем сам исполняемый файл
+          cp dist/ByteBoots release/ByteBoots-macOS/
+          
+          # Создаем внешние папки (БД, картинки, шаблоны), которые должны лежать РЯДОМ с файлом
+          mkdir -p release/ByteBoots-macOS/db
+          mkdir -p release/ByteBoots-macOS/images
+          cp -r images/* release/ByteBoots-macOS/images/
+          
+          mkdir -p release/ByteBoots-macOS/templates
+          cp templates/import_template.xlsx release/ByteBoots-macOS/templates/
+          
+          # Запаковываем всё в ZIP архив
+          cd release
+          zip -r ByteBoots-macOS.zip ByteBoots-macOS
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ByteBoots-macOS
+          path: release/ByteBoots-macOS.zip
